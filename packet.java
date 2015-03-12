@@ -11,34 +11,32 @@ public class packet {
 	// data members
 	private int type;
 	private int seqnum;
-	private int sent;
 	private String data;
 	
 	//////////////////////// CONSTRUCTORS //////////////////////////////////////////
 	
 	// hidden constructor to prevent creation of invalid packets
-	private packet(int Type, int SeqNum, int Sent, String strData) throws Exception {
+	private packet(int Type, int SeqNum, String strData) throws Exception {
 		// if data seqment larger than allowed, then throw exception
 		if (strData.length() > maxDataLength)
 			throw new Exception("data too large (max 500 chars)");
 			
 		type = Type;
 		seqnum = SeqNum % SeqNumModulo;
-		sent = Sent;
 		data = strData;
 	}
 	
 	// special packet constructors to be used in place of hidden constructor
 	public static packet createACK(int SeqNum) throws Exception {
-		return new packet(0, SeqNum, 0, new String());
+		return new packet(0, SeqNum, new String());
 	}
 	
 	public static packet createPacket(int SeqNum, String data) throws Exception {
-		return new packet(1, SeqNum, 0, data);
+		return new packet(1, SeqNum, data);
 	}
 	
 	public static packet createEOT(int SeqNum) throws Exception {
-		return new packet(2, SeqNum, 0, new String());
+		return new packet(2, SeqNum, new String());
 	}
 	
 	///////////////////////// PACKET DATA //////////////////////////////////////////
@@ -55,10 +53,6 @@ public class packet {
 		return data.length();
 	}
 	
-	public int sent() {
-		return sent;
-	}
-	
 	public byte[] getData() {
 		return data.getBytes();
 	}
@@ -69,7 +63,6 @@ public class packet {
 		ByteBuffer buffer = ByteBuffer.allocate(512);
 		buffer.putInt(type);
         buffer.putInt(seqnum);
-        buffer.putInt(sent);
         buffer.putInt(data.length());
         buffer.put(data.getBytes(),0,data.length());
 		return buffer.array();
@@ -79,10 +72,9 @@ public class packet {
 		ByteBuffer buffer = ByteBuffer.wrap(UDPdata);
 		int type = buffer.getInt();
 		int seqnum = buffer.getInt();
-		int sent = buffer.getInt();
 		int length = buffer.getInt();
 		byte data[] = new byte[length];
 		buffer.get(data, 0, length);
-		return new packet(type, seqnum, sent, new String(data));
+		return new packet(type, seqnum, new String(data));
 	}
 }

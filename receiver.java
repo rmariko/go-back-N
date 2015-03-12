@@ -6,13 +6,13 @@ import java.net.InetAddress;
 public class receiver {
 	
 	///////////////////////// HELPERS ///////////////////////////////////////
-	public static void sendAck(DatagramSocket socket, int type, int expSeqNum, InetAddress IPAddress, int port) {
+	public static void sendAck(DatagramSocket socket, int type, int expSeqNum, InetAddress IPAddress, int port) throws Exception {
 		byte[] dataToSend = new byte[1024];
 		
 		if (type == 0) {
-			datatoSend = packet.createACK(expSeqNum).getUDPdata();
+			dataToSend = packet.createACK(expSeqNum).getUDPdata();
 		} else if (type == 2) {
-			datatoSend = packet.createEOT(expSeqNum).getUDPdata();
+			dataToSend = packet.createEOT(expSeqNum).getUDPdata();
 		}
 		
 		// Create a datagram to send to the sender
@@ -43,7 +43,7 @@ public class receiver {
 		String filePath = args[3];
 		
 		// Variables
-		expSeqNum = 0;
+		int expSeqNum = 0;
 		
 		////////////////////////////////////////////////////////////////
 		// Create a transaction socket for sender's request

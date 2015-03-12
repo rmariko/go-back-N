@@ -8,7 +8,7 @@ public class sender{
 	////////////////////////// HELPER FUNCTIONS ////////////////////////////////////////
 	
 	// Send a udp packet 
-	public static void udt_send(DatagramSocket senderSocket, packet p, int host, int r_port) {
+	public static void udt_send(DatagramSocket senderSocket, packet p, String host, int r_port) throws IOException {
 		// Translate host to IP address using DNS
 		InetAddress IPAddress = InetAddress.getByName(host);
 		
@@ -26,7 +26,7 @@ public class sender{
 	}
 	
 	// Receive an ack packet
-	public static packet rdt_rcv(DatagramSocket senderSocket){
+	public static packet rdt_rcv(DatagramSocket senderSocket) throws Exception{
 		byte[] receiveData = new byte[1024];
 		
 		// Create a data-to-receive packet
@@ -54,8 +54,8 @@ public class sender{
 	public static void main(String args[]) throws Exception{
 		// Command line arguments
 		String emulatorHost = args[0];
-		int recievePort = Integer.parseInt(args[1]);
-		int sendPort = Integer.parseInt(args[2]);
+		int recieverPort = Integer.parseInt(args[1]);
+		int senderPort = Integer.parseInt(args[2]);
 		String filePath = args[3];
 		
 		// Variables 
@@ -64,8 +64,7 @@ public class sender{
 		int seq = 0;
 		int nextSeqNum = 0;
 		int ack = 0;
-		ArrayList<Packet> queue = new ArrayList<packet>();
-		Timer timer = new Timer();
+		ArrayList<packet> queue = new ArrayList<packet>();
 		
 		// Read file data into packets and add them to the queue to be sent
 		try {
@@ -86,6 +85,9 @@ public class sender{
 					data.setLength(0);
 				}
 			}
+			// Close the file
+			fileInput.close();
+			
 			// I am at the end of my file but have <= totalChars
 			if ((data.toString().length() <= 500) && (data.toString().length() > 0)){
 				// Create a packet and add it to the queue to send
@@ -105,21 +107,20 @@ public class sender{
 		
 		// With this option set to a non-zero timeout, a call to receive() for this 
 		// DatagramSocket will block for only this amount of time.
-		senderSocket.setSoTimeout(1000L);
+		senderSocket.setSoTimeout(1000);
 		
 		while (true) {
 			// Send packet if window is not full
 			if(nextSeqNum < (sendBase + window)) {
 				System.out.println("NOTFULL");
 				
-				// send the packet
+				// Send the packet
 				udt_send(senderSocket, queue.get(nextSeqNum), emulatorHost, recieverPort);
 				
 				// Write to seqnum.log
 				writeToFile("seqnum.log", Integer.toString(queue.get(nextSeqNum).getSeqNum()));
 				
-				// Update the packet sent field and start timer
-				queue.get(nextSeqNum).sent = 1;
+				// Start timer
 				if (sendBase == nextSeqNum) {
 					// start timer
 				}
