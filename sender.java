@@ -200,6 +200,10 @@ public class sender{
 					// stop timer
 					start = 0;
 					timerOn = false;
+				} else {
+					// start timer
+					start = startTime();
+					timerOn = true;
 				}
 				
 				// Write to ack.log
