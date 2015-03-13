@@ -85,7 +85,7 @@ public class receiver {
 					
 					// Increment the expected seq number
 					expSeqNum++;
-				} else {
+				} else if (most_recent != -1){
 					// Send ack for the most recently received in-order packet
 					sendAck(transactionSocket, 0, most_recent, IPAddress, sendPort);
 				}

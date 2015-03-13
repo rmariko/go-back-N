@@ -194,9 +194,9 @@ public class sender{
 				packet receivedPacket = packet.parseUDPdata(acknowledgment);
 				
 				ack = receivedPacket.getSeqNum();
-							
-				if(ack+1 == nextSeqNum) {
-					sendBase = ack + 1;
+				
+				sendBase = ack + 1;
+				if(sendBase == nextSeqNum) {
 					// stop timer
 					start = 0;
 					timerOn = false;
