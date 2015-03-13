@@ -1,7 +1,5 @@
 import java.io.*;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
+import java.net.*;
 
 public class receiver {
 	
@@ -47,39 +45,50 @@ public class receiver {
 		
 		////////////////////////////////////////////////////////////////
 		// Create a transaction socket for sender's request
-		DatagramSocket transactionSocket = new DatagramSocket(0);
-		byte[] dataReceived = new byte[1024];
+		DatagramSocket transactionSocket = new DatagramSocket(receivePort);
 		
-		// Create space for the datagram received 
-		DatagramPacket receivePacket =
-				new DatagramPacket(dataReceived, dataReceived.length);
+		int most_recent = -1;
 		
-		// Receive the datagram
-		transactionSocket.receive(receivePacket);
+		while (true) {
+			byte[] dataReceived = new byte[1024];
+			
+			// Create space for the datagram received 
+			DatagramPacket receivePacket =
+					new DatagramPacket(dataReceived, dataReceived.length);
+			
+			// Receive the datagram
+			transactionSocket.receive(receivePacket);
+			
+			packet rp = packet.parseUDPdata(receivePacket.getData());
 		
-		packet rp = packet.parseUDPdata(receivePacket.getData());
-		
-		// Grab the IP address, port # of the sender
-		InetAddress IPAddress = receivePacket.getAddress();
-		int port = receivePacket.getPort();
-		
-		// Write to log
-		writeToFile("arrival.log", Integer.toString(rp.getSeqNum()));
-		
-		// Check sequence number of the packet
-		if(rp.getType() == 2) {
-			// This is an EOT packet, so send one back
-			sendAck(transactionSocket, 2, expSeqNum, IPAddress, port);
-		
-		} else if (rp.getType() == 1) {
-			// Send ack packet
-			sendAck(transactionSocket, 0, expSeqNum, IPAddress, port);
-			if (rp.getSeqNum() == expSeqNum) {
-				// Append data to file
-				writeToFile(filePath, new String(rp.getData()));
+			// Grab the IP address, port # of the sender
+			InetAddress IPAddress = InetAddress.getByName(emulatorHost);
+			
+			// Check sequence number of the packet
+			if(rp.getType() == 2) {
+				// This is an EOT packet, so send one back
+				sendAck(transactionSocket, 2, rp.getSeqNum(), IPAddress, sendPort);
+				transactionSocket.close();
+				return;
+			
+			} else if (rp.getType() == 1) {
+				// Write to log
+				writeToFile("arrival.log", Integer.toString(rp.getSeqNum()));
 				
-				// Increment the expected seq number
-				expSeqNum++;
+				if (rp.getSeqNum() == expSeqNum) {
+					most_recent = rp.getSeqNum();
+					// Send ack packet
+					sendAck(transactionSocket, 0, rp.getSeqNum(), IPAddress, sendPort);
+					
+					// Append data to file
+					writeToFile(filePath, new String(rp.getData()));
+					
+					// Increment the expected seq number
+					expSeqNum++;
+				} else {
+					// Send ack for the most recently received in-order packet
+					sendAck(transactionSocket, 0, most_recent, IPAddress, sendPort);
+				}
 			}
 		}
 	}
