@@ -7,34 +7,51 @@ public class sender{
 	
 	////////////////////////// HELPER FUNCTIONS ////////////////////////////////////////
 	
+	// Global Variables 
+	private static int window = 10;
+	private static int sendBase = 0;
+	private static int seq = 0;
+	private static int nextSeqNum = 0;
+	private static int ack = 0;
+	private static boolean timerOn = false;
+	private static long start = 0;
+	private static ArrayList<packet> queue = new ArrayList<packet>();
+	
+	private static String emulatorHost;
+	private static int recieverPort;
+	private static DatagramSocket senderSocket;
+	
 	////////////////////////// Send a udp packet 
-	public static void udt_send(DatagramSocket senderSocket, packet p, String host, int r_port) throws IOException {
+	public static void udt_send(packet p) {
 		
 		// Translate host to IP address using DNS
-		InetAddress IPAddress = InetAddress.getByName(host);
-		
-		// Get bytes from packet data
-		 byte[] sendData = p.getUDPdata();
-		 
-		// Create a datagram with data-to-send, length, IP, and port
-		DatagramPacket sendPacket = 
-				new DatagramPacket(sendData, sendData.length, IPAddress, r_port);
-		
-		// Send the datagram to the server
-		senderSocket.send(sendPacket);
+		InetAddress IPAddress;
+		try {
+			IPAddress = InetAddress.getByName(emulatorHost);
+			
+			// Get bytes from packet data
+			 byte[] sendData = p.getUDPdata();
+			 
+			// Create a datagram with data-to-send, length, IP, and port
+			DatagramPacket sendPacket = 
+					new DatagramPacket(sendData, sendData.length, IPAddress, recieverPort);
+			
+			// Send the datagram to the server
+			try {
+				senderSocket.send(sendPacket);
+				
+			} catch (IOException e) {
+				// Do nothing
+			}
+			
+		} catch (UnknownHostException e1) {
+			e1.printStackTrace();
+		}
 	}
 	
 	////////////////////////// Receive an acknowledgment packet
-	static String special = "0xDEADBEEF";
-	public static byte[] rdt_rcv(DatagramSocket senderSocket) throws Exception{
+	public static void rdt_rcv() {
 		byte[] receiveData = new byte[1024];
-		
-		// I want to pad the beginning of my original receiving packet with a random
-		// string. Since I am not blocking, I need another way to check if I am 
-		// actually receiving a valid packet from the reciever.
-		for(int i=0; i < special.getBytes().length; i++){
-			receiveData[i] = special.getBytes()[i];
-		}
 		
 		// Create a data-to-receive packet
 		DatagramPacket receivePacket = 
@@ -43,21 +60,32 @@ public class sender{
 		// Read datagram from the server
 		try {
 			senderSocket.receive(receivePacket);
+			
+			// Parse our bytes to a packet
+			packet receivedPacket = packet.parseUDPdata(receivePacket.getData());
+			
+			ack = receivedPacket.getSeqNum();
+			
+			sendBase = ack + 1;
+			if(sendBase == nextSeqNum) {
+				// stop timer
+				start = 0;
+				timerOn = false;
+			} else {
+				// start timer
+				start = startTime();
+				timerOn = true;
+			}
+			
+			// Write to ack.log
+			writeToFile("ack.log", Integer.toString(ack));
+			
 		} catch (SocketTimeoutException e) {
-			// TODO Auto-generated catch block
-		}
-		
-		return receivePacket.getData();
-	}
-	
-	////////////////////////// Check if a received acknowledgment is valid
-	public static boolean valid_ack(byte[] b){
-		String valid = new String(b);
-		valid = valid.substring(0, 10);
-		if(valid.equals(special)) {
-			return false;
-		} else {
-			return true;
+			// Do nothing on timeout
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 	
@@ -78,29 +106,31 @@ public class sender{
 	}
 	
 	////////////////////////// Check for timeout
-	public static boolean timeout(long start, long current){
-		if((current - start) >= 5) {
-			return true;
-		} else {
-			return false;
+	public static void timeout(long current){
+		if(start != 0 && timerOn){
+			if((current - start) >= 5) {
+				// Start timer
+				start = startTime();
+				timerOn = true;
+				
+				// Send packets from base - nextseqnum
+				for(int i=sendBase; i < nextSeqNum; i++) {
+					udt_send(queue.get(i));
+					
+					// Write to seqnum.log
+					writeToFile("seqnum.log", Integer.toString(queue.get(i).getSeqNum()));
+				}
+			}
 		}
 	}
 	
 	///////////////////////// MAIN FUNCTION //////////////////////////////////////////
 	public static void main(String args[]) throws Exception{
 		// Command line arguments
-		String emulatorHost = args[0];
-		int recieverPort = Integer.parseInt(args[1]);
+		emulatorHost = args[0];
+		recieverPort = Integer.parseInt(args[1]);
 		int senderPort = Integer.parseInt(args[2]);
 		String filePath = args[3];
-		
-		// Variables 
-		int window = 10;
-		int sendBase = 0;
-		int seq = 0;
-		int nextSeqNum = 0;
-		int ack = 0;
-		ArrayList<packet> queue = new ArrayList<packet>();
 		
 		// Read file data into packets and add them to the queue to be sent
 		try {
@@ -139,38 +169,21 @@ public class sender{
 		}
 		
 		///////////////////////// SEND PACKETS //////////////////////////////////////////
-		DatagramSocket senderSocket = new DatagramSocket(senderPort);
+		 senderSocket = new DatagramSocket(senderPort);
 		
 		// With this option set to a non-zero timeout, a call to receive() for this 
 		// DatagramSocket will block for only this amount of time.
 		senderSocket.setSoTimeout(1000);
 		
-		// Initialize timer variables
-		boolean timerOn = false;
-		long start = 0;
-		
 		while (true) {	
 			// Check for timeout
-			if(start != 0 && timerOn && timeout(start, System.currentTimeMillis())) {
-				
-				// Start timer
-				start = startTime();
-				timerOn = true;
-				
-				// Send packets from base - nextseqnum
-				for(int i=sendBase; i < nextSeqNum; i++) {
-					udt_send(senderSocket, queue.get(i), emulatorHost, recieverPort);
-					
-					// Write to seqnum.log
-					writeToFile("seqnum.log", Integer.toString(queue.get(i).getSeqNum()));
-				}
-			}
+			timeout(System.currentTimeMillis());
 			
 			// Send packet if window is not full
 			if(nextSeqNum < queue.size() && nextSeqNum < (sendBase + window)) {
 				
 				// Send the packet
-				udt_send(senderSocket, queue.get(nextSeqNum), emulatorHost, recieverPort);
+				udt_send(queue.get(nextSeqNum));
 				
 				// Write to seqnum.log
 				writeToFile("seqnum.log", Integer.toString(queue.get(nextSeqNum).getSeqNum()));
@@ -184,35 +197,11 @@ public class sender{
 			}
 			
 			// Try to receive a packet
-			byte[] acknowledgment = rdt_rcv(senderSocket);
-			
-			// Because we are not blocking here, we need to have a way to actually check if we have received a proper
-			// acknowledgment.
-			if(valid_ack(acknowledgment) == true){
-			
-				// Parse our bytes to a packet
-				packet receivedPacket = packet.parseUDPdata(acknowledgment);
-				
-				ack = receivedPacket.getSeqNum();
-				
-				sendBase = ack + 1;
-				if(sendBase == nextSeqNum) {
-					// stop timer
-					start = 0;
-					timerOn = false;
-				} else {
-					// start timer
-					start = startTime();
-					timerOn = true;
-				}
-				
-				// Write to ack.log
-				writeToFile("ack.log", Integer.toString(ack));
-			}
+			rdt_rcv();
 				
 			// CHECK FOR EOT
 			if(sendBase == queue.size()) {
-				udt_send(senderSocket, packet.createEOT(nextSeqNum), emulatorHost, recieverPort);
+				udt_send(packet.createEOT(nextSeqNum));
 				senderSocket.close();
 				return;
 			}
