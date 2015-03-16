@@ -1,6 +1,5 @@
 import java.io.*;
 import java.net.*;
-import java.lang.*;
 import java.util.*;
 
 public class sender{
@@ -13,8 +12,10 @@ public class sender{
 	private static int seq = 0;
 	private static int nextSeqNum = 0;
 	private static int ack = 0;
+	private static int lastAck = -1;
 	private static boolean timerOn = false;
-	private static long start = 0;
+	private static long start = 0; 
+	private static int timeOut = 1500;
 	private static ArrayList<packet> queue = new ArrayList<packet>();
 	
 	private static String emulatorHost;
@@ -30,7 +31,7 @@ public class sender{
 			IPAddress = InetAddress.getByName(emulatorHost);
 			
 			// Get bytes from packet data
-			 byte[] sendData = p.getUDPdata();
+			byte[] sendData = p.getUDPdata();
 			 
 			// Create a datagram with data-to-send, length, IP, and port
 			DatagramPacket sendPacket = 
@@ -39,7 +40,6 @@ public class sender{
 			// Send the datagram to the server
 			try {
 				senderSocket.send(sendPacket);
-				
 			} catch (IOException e) {
 				// Do nothing
 			}
@@ -51,6 +51,7 @@ public class sender{
 	
 	////////////////////////// Receive an acknowledgment packet
 	public static void rdt_rcv() {
+		int newBase = 0;
 		byte[] receiveData = new byte[1024];
 		
 		// Create a data-to-receive packet
@@ -66,8 +67,21 @@ public class sender{
 			
 			ack = receivedPacket.getSeqNum();
 			
-			sendBase = ack + 1;
-			if(sendBase == nextSeqNum) {
+			// Check to see if my current ack is just a repeat of the last
+			if(ack != lastAck) {
+				// Case where I receive an ack packet that has a lower sequence number
+				// than my current sendBase
+				if(ack < sendBase) {
+					newBase = 32 - sendBase;
+					sendBase = sendBase + newBase + ack + 1;
+				} else {
+					// Set sendBase
+					sendBase = ack + 1;
+				}
+				lastAck = ack;
+			}
+			
+			if(sendBase % 32 == nextSeqNum % 32) {
 				// stop timer
 				start = 0;
 				timerOn = false;
@@ -108,7 +122,7 @@ public class sender{
 	////////////////////////// Check for timeout
 	public static void timeout(long current){
 		if(start != 0 && timerOn){
-			if((current - start) >= 5) {
+			if((current - start) >= timeOut) {
 				// Start timer
 				start = startTime();
 				timerOn = true;
@@ -175,12 +189,14 @@ public class sender{
 		// DatagramSocket will block for only this amount of time.
 		senderSocket.setSoTimeout(1000);
 		
-		while (true) {	
+		while (true) {
+			
 			// Check for timeout
 			timeout(System.currentTimeMillis());
 			
 			// Send packet if window is not full
 			if(nextSeqNum < queue.size() && nextSeqNum < (sendBase + window)) {
+				//System.out.print(nextSeqNum);
 				
 				// Send the packet
 				udt_send(queue.get(nextSeqNum));

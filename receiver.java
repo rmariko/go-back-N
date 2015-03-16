@@ -22,10 +22,14 @@ public class receiver {
 	}	
 	
 	///// Write to a file /////
-	public static void writeToFile(String fileName, String data) {
+	public static void writeToFile(String fileName, String data, boolean isFile) {
 		try {
 			PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(fileName, true)));
-			out.println(data);
+			if(!isFile) {
+				out.println(data);
+			} else {
+				out.print(data);
+			}
 			out.close();
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -41,6 +45,7 @@ public class receiver {
 		String filePath = args[3];
 		
 		// Variables
+		final int expSeqNumModulo = 32;
 		int expSeqNum = 0;
 		
 		////////////////////////////////////////////////////////////////
@@ -73,15 +78,15 @@ public class receiver {
 			
 			} else if (rp.getType() == 1) {
 				// Write to log
-				writeToFile("arrival.log", Integer.toString(rp.getSeqNum()));
+				writeToFile("arrival.log", Integer.toString(rp.getSeqNum()), false);
 				
-				if (rp.getSeqNum() == expSeqNum) {
+				if (rp.getSeqNum() == expSeqNum % expSeqNumModulo) {
 					most_recent = rp.getSeqNum();
 					// Send ack packet
 					sendAck(transactionSocket, 0, rp.getSeqNum(), IPAddress, sendPort);
 					
 					// Append data to file
-					writeToFile(filePath, new String(rp.getData()));
+					writeToFile(filePath, new String(rp.getData()), true);
 					
 					// Increment the expected seq number
 					expSeqNum++;
